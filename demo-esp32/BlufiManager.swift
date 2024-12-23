@@ -88,10 +88,29 @@ extension BlufiManager: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("已连接到设备: \(peripheral.name ?? "Unknown")")
         
-        // 创建并配置 BlufiClient
+        // 1. 先保存外设引用
+        currentPeripheral = peripheral
+        
+        // 2. 设置外设代理
+        peripheral.delegate = self
+        
+        // 3. 开始搜索服务
+        print("【DEBUG】开始搜索服务")
+        peripheral.discoverServices(nil)
+        
+        // 4. 创建并配置 BlufiClient
         let client = BlufiClient()
+        print("【DEBUG】BlufiClient 创建完成")
+        
+        // 5. 设置代理并保存引用（重要：要保持强引用）
         client.blufiDelegate = self
+        print("【DEBUG】设置 blufiDelegate 完成")
+        
+        // 6. 连接设备
         client.connect(peripheral.identifier.uuidString)
+        print("【DEBUG】调用 client.connect 完成")
+        
+        // 7. 保存 client 引用
         blufiClient = client
         
         onConnected?()
@@ -113,17 +132,45 @@ extension BlufiManager: CBCentralManagerDelegate {
 // MARK: - CBPeripheralDelegate
 extension BlufiManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        print("发现服务: \(error?.localizedDescription ?? "成功")")
+        print("【DEBUG】发现服务: \(error?.localizedDescription ?? "成功")")
+        
+        // 遍历所有服务
+        guard let services = peripheral.services else { return }
+        for service in services {
+            print("【DEBUG】发现服务 UUID: \(service.uuid)")
+            peripheral.discoverCharacteristics(nil, for: service)
+        }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        print("发现特征: \(error?.localizedDescription ?? "成功")")
+        print("【DEBUG】发现特征: \(error?.localizedDescription ?? "成功")")
+        
+        // 遍历所有特征
+        guard let characteristics = service.characteristics else { return }
+        for characteristic in characteristics {
+            print("【DEBUG】发现特征 UUID: \(characteristic.uuid)")
+            
+            // 如果是可通知的特征，订阅它
+            if characteristic.properties.contains(.notify) {
+                print("【DEBUG】订阅特征通知: \(characteristic.uuid)")
+                peripheral.setNotifyValue(true, for: characteristic)
+            }
+        }
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        print("【DEBUG】收到特征值更新: \(characteristic.uuid)")
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        print("【DEBUG】写入特征值: \(characteristic.uuid), 错误: \(error?.localizedDescription ?? "无")")
     }
 }
 
 // MARK: - BlufiDelegate
 extension BlufiManager: BlufiDelegate {
     func blufi(_ client: BlufiClient!, gattPrepared status: Int32, service: CBService!, writeChar: CBCharacteristic!, notifyChar: CBCharacteristic!) {
+        print("【DEBUG】进入 gattPrepared 回调，status: \(status)")
         if status == 0 {
             print("GATT准备完成，开始安全协商")
             client.negotiateSecurity()
@@ -134,6 +181,7 @@ extension BlufiManager: BlufiDelegate {
     }
     
     func blufi(_ client: BlufiClient!, didNegotiateSecurity status: Int32) {
+        print("【DEBUG】进入 didNegotiateSecurity 回调，status: \(status)")
         if status == 0 {
             print("安全协商成功")
             onStateUpdate?("安全协商成功")
@@ -144,6 +192,7 @@ extension BlufiManager: BlufiDelegate {
     }
     
     func blufi(_ client: BlufiClient!, didPostConfigureParams status: Int32) {
+        print("【DEBUG】进入 didPostConfigureParams 回调，status: \(status)")
         if status == 0 {
             print("WiFi配置成功")
             onConfigured?()
