@@ -95,13 +95,13 @@ struct ContentView: View {
     // 状态图标
     private var statusIcon: String {
         switch bluetoothManager.state {
-        case .poweredOff: return "bluetooth.slash"
-        case .poweredOn: return "bluetooth"
-        case .scanning: return "arrow.clockwise"
-        case .connected: return "wifi"
-        case .configuring: return "gear"
-        case .configured: return "checkmark.circle"
-        case .error: return "exclamationmark.triangle"
+        case .poweredOff: return "bolt.horizontal.circle"
+        case .poweredOn: return "bolt.horizontal.circle.fill"
+        case .scanning: return "arrow.triangle.2.circlepath"
+        case .connected: return "wifi.circle.fill"
+        case .configuring: return "gearshape.fill"
+        case .configured: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.triangle.fill"
         }
     }
     
@@ -187,8 +187,9 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     func startScan() {
+        print("开始扫描蓝牙设备...")
         state = .scanning
-        centralManager.scanForPeripherals(withServices: nil, options: nil)
+        centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
     }
     
     func stopScan() {
@@ -236,8 +237,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        print("发现设备: \(peripheral.name ?? "Unknown Device") - RSSI: \(RSSI)")
         // 这里可以根据设备名称或其他特征过滤设备
-        if peripheral.name?.contains("ESP32") == true {
+        if let name = peripheral.name, name.contains("ESP32") {
+            print("找到目标ESP32设备：\(name)")
             self.peripheral = peripheral
             central.connect(peripheral, options: nil)
         }
