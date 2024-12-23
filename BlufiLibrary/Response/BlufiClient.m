@@ -991,43 +991,53 @@ enum {
         BOOL setSecurity = NO;
         BlufiStatusCode code = StatusFailed;
         @try {
+            NSLog(@"[BluFi] 开始安全协商...");
+            
             BlufiDH *blufiDH = [self postNegotiateSecurity];
             if (!blufiDH) {
+                NSLog(@"[BluFi] 错误: DH密钥交换失败");
                 code = StatusWriteFailed;
                 return;
             }
-            NSLog(@"negotiateSecurity DH posted");
+            NSLog(@"[BluFi] DH密钥交换成功");
             
             NSData *deviceKey = [self.deviceKey dequeue];
             if (!deviceKey) {
-                NSLog(@"negotiateSecurity Recevie nil deviceKey");
+                NSLog(@"[BluFi] 错误: 获取设备密钥失败");
                 code = StatusFailed;
                 return;
             }
+            NSLog(@"[BluFi] 成功获取设备密钥");
             
             NSData *secretKey = [blufiDH generateSecret:deviceKey];
             self.aesKey = [BlufiSecurity md5:secretKey];
+            NSLog(@"[BluFi] 生成AES密钥成功");
+            
             if (DBUG) {
-                NSLog(@"DH Secret = %@", secretKey);
-                NSLog(@"AES Key   = %@", self.aesKey);
+                NSLog(@"[BluFi] DH Secret = %@", secretKey);
+                NSLog(@"[BluFi] AES Key   = %@", self.aesKey);
             }
             
             setSecurity = [self postSetSecurityCtrlEncrypted:NO ctrlChecksum:NO dataEncrypted:YES dataChecksum:YES];
             if (!setSecurity) {
-                NSLog(@"negotiateSecurity postSetSecurity failed");
+                NSLog(@"[BluFi] 错误: 设置安全模式失败");
                 code = StatusWriteFailed;
+            } else {
+                NSLog(@"[BluFi] 设置安全模式成功");
             }
         } @catch (NSException *exception) {
-            NSLog(@"negotiateSecurity exception: %@", exception);
+            NSLog(@"[BluFi] 安全协商异常: %@", exception);
             code = StatusException;
         } @finally {
             if (setSecurity) {
                 self.encrypted = YES;
                 self.checksum = YES;
+                NSLog(@"[BluFi] 安全协商完成: 加密已启用");
                 [self onNegotiateSecurityResult:StatusSuccess];
             } else {
                 self.encrypted = NO;
                 self.checksum = NO;
+                NSLog(@"[BluFi] 安全协商失败: 代码=%d", code);
                 [self onNegotiateSecurityResult:code];
             }
         }
@@ -1071,6 +1081,7 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didConnectPeripheral:(CBPeripheral *)peripheral {
+    NSLog(@"[BluFi] 蓝牙设备连接成功");
     // Connect BLE successfully
     CBUUID *uuid = [CBUUID UUIDWithString:UUID_SERVICE];
     NSArray<CBUUID *> *filters = @[uuid];
@@ -1087,6 +1098,7 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
+    NSLog(@"[BluFi] 蓝牙设备连接失败: %@", error);
     // Connect BLE failed
     [self clearConnection];
     
@@ -1100,6 +1112,7 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
+    NSLog(@"[BluFi] 蓝牙设备断开连接: %@", error ? error : @"正常断开");
     // Disconnect BLE
     [self clearConnection];
     
@@ -1127,12 +1140,12 @@ enum {
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didDiscoverServices:(NSError *)error {
-    // Discover services
     if (error) {
-        NSLog(@"didDiscoverServices error: %@", error);
+        NSLog(@"[BluFi] 发现服务失败: %@", error);
         [self clearConnection];
         [self gattDiscoverCallback];
     } else {
+        NSLog(@"[BluFi] 发现服务成功");
         NSArray<CBService *> *services = [peripheral services];
         for (CBService *service in services) {
             if ([service.UUID.UUIDString isEqualToString:UUID_SERVICE]) {
@@ -1145,7 +1158,7 @@ enum {
             [peripheral discoverCharacteristics:nil forService:service];
             _service = service;
         } else {
-            NSLog(@"didDiscoverServices failed");
+            NSLog(@"[BluFi] 未找到目标服务");
             [self gattDiscoverCallback];
             [self clearConnection];
         }
