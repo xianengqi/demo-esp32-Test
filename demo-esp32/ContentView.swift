@@ -97,6 +97,10 @@ struct ContentView: View {
                 }
             }
             .padding(.vertical, 4)
+            .contentShape(Rectangle())  // 确保整个区域可点击
+            .onTapGesture {
+                bluetoothManager.connectToDevice(device)
+            }
         }
         .listStyle(.plain)
         .frame(height: 200)
@@ -231,6 +235,12 @@ class BluetoothManager: NSObject, ObservableObject {
         centralManager = CBCentralManager(delegate: self, queue: nil)
     }
     
+    func connectToDevice(_ device: DiscoveredDevice) {
+        print("正在连接设备：\(device.name)")
+        self.peripheral = device.peripheral
+        centralManager.connect(device.peripheral, options: nil)
+    }
+    
     func startScan() {
         print("开始扫描蓝牙设备...")
         discoveredDevices.removeAll()
@@ -253,7 +263,7 @@ class BluetoothManager: NSObject, ObservableObject {
         
         // 创建配置参数
         let params = BlufiConfigureParams()
-        params.opMode = OpModeSta
+      params.opMode = OpModeSta // OpModeSta
         params.staSsid = ssid
         params.staPassword = password
         
@@ -299,23 +309,19 @@ extension BluetoothManager: CBCentralManagerDelegate {
                 self.discoveredDevices.append(device)
             }
         }
-        
-        // 如果是ESP32设备，自动连接
-        if deviceName.contains("ESP32") {
-            print("找到目标ESP32设备：\(deviceName)")
-            self.peripheral = peripheral
-            central.connect(peripheral, options: nil)
-        }
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        state = .connected
-        stopScan()
+        DispatchQueue.main.async {
+            self.state = .connected
+            self.stopScan()
+        }
         
         // 初始化BlufiClient
-        blufiClient = BlufiClient()
-        blufiClient?.blufiDelegate = self
-        blufiClient?.connect(peripheral.identifier.uuidString)
+        let client = BlufiClient()
+        client.blufiDelegate = self
+        client.connect(peripheral.identifier.uuidString)
+        self.blufiClient = client
     }
     
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -325,24 +331,28 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
 // MARK: - BlufiDelegate
 extension BluetoothManager: BlufiDelegate {
-    func blufi(_ client: BlufiClient, gattPrepared status: BlufiStatusCode, service: CBService?, writeChar: CBCharacteristic?, notifyChar: CBCharacteristic?) {
-        if status == StatusSuccess {
+    func blufi(_ client: BlufiClient!, gattPrepared status: Int32, service: CBService!, writeChar: CBCharacteristic!, notifyChar: CBCharacteristic!) {
+        if status == 0 { // StatusSuccess
             // GATT准备就绪，可以开始协商安全
             client.negotiateSecurity()
         } else {
-            state = .error("GATT准备失败")
+            DispatchQueue.main.async {
+                self.state = .error("GATT准备失败")
+            }
         }
     }
     
-    func blufi(_ client: BlufiClient, didNegotiateSecurity status: BlufiStatusCode) {
-        if status != StatusSuccess {
-            state = .error("安全协商失败")
-        }
-    }
-    
-    func blufi(_ client: BlufiClient, didPostConfigureParams status: BlufiStatusCode) {
+    func blufi(_ client: BlufiClient!, didNegotiateSecurity status: Int32) {
         DispatchQueue.main.async {
-            if status == StatusSuccess {
+            if status != 0 { // StatusSuccess
+                self.state = .error("安全协商失败")
+            }
+        }
+    }
+    
+    func blufi(_ client: BlufiClient!, didPostConfigureParams status: Int32) {
+        DispatchQueue.main.async {
+            if status == 0 { // StatusSuccess
                 self.state = .configured
             } else {
                 self.state = .error("WiFi配置失败")
