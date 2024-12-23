@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreBluetooth
+import UIKit
 
 // 定义发现的设备结构
 struct DiscoveredDevice: Identifiable, Hashable {
@@ -143,20 +144,23 @@ struct ContentView: View {
     @State private var wifiPassword: String = ""
     
     var body: some View {
-        VStack(spacing: 20) {
-            statusView
-            
-            if viewModel.state == .scanning {
-                deviceListView
+        ScrollView {
+            VStack(spacing: 20) {
+                statusView
+                
+                if viewModel.state == .scanning {
+                    deviceListView
+                }
+                
+                if viewModel.state == .connected {
+                    wifiConfigForm
+                }
+                
+                actionButton
             }
-            
-            if viewModel.state == .connected {
-                wifiConfigForm
-            }
-            
-            actionButton
+            .padding()
         }
-        .padding()
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
     
     private var deviceListView: some View {
@@ -197,13 +201,18 @@ struct ContentView: View {
     }
     
     private var wifiConfigForm: some View {
-        VStack {
+        VStack(spacing: 16) {
             TextField("WiFi名称", text: $wifiSSID)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity)
             
             SecureField("WiFi密码", text: $wifiPassword)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+                .frame(maxWidth: .infinity)
         }
+        .padding(.vertical)
     }
     
     private var actionButton: some View {
@@ -240,7 +249,7 @@ struct ContentView: View {
         switch viewModel.state {
         case .poweredOff: return "蓝牙已关闭"
         case .poweredOn: return "蓝牙已开启"
-        case .scanning: return "正在扫���设备..."
+        case .scanning: return "正在扫描设备..."
         case .connected: return "设备已连接"
         case .configuring: return "正在配置WiFi..."
         case .configured: return "配置成功"
