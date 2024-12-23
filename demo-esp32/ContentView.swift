@@ -34,7 +34,6 @@ enum BluetoothState: Equatable {
     case configured
     case error(String)
     
-    // 实现 Equatable
     static func == (lhs: BluetoothState, rhs: BluetoothState) -> Bool {
         switch (lhs, rhs) {
         case (.poweredOff, .poweredOff),
@@ -52,36 +51,100 @@ enum BluetoothState: Equatable {
     }
 }
 
-// 主视图
+class BluetoothViewModel: ObservableObject {
+    @Published var state: BluetoothState = .poweredOff
+    @Published var discoveredDevices: [DiscoveredDevice] = []
+    
+    private let blufiManager = BlufiManager.shared
+    
+    init() {
+        setupCallbacks()
+    }
+    
+    private func setupCallbacks() {
+        blufiManager.onStateUpdate = { [weak self] message in
+            DispatchQueue.main.async {
+                switch message {
+                case "蓝牙已开启":
+                    self?.state = .poweredOn
+                case "蓝牙已关闭":
+                    self?.state = .poweredOff
+                default:
+                    break
+                }
+            }
+        }
+        
+        blufiManager.onError = { [weak self] message in
+            DispatchQueue.main.async {
+                self?.state = .error(message)
+            }
+        }
+        
+        blufiManager.onConnected = { [weak self] in
+            DispatchQueue.main.async {
+                self?.state = .connected
+            }
+        }
+        
+        blufiManager.onConfigured = { [weak self] in
+            DispatchQueue.main.async {
+                self?.state = .configured
+            }
+        }
+    }
+    
+    func startScan() {
+        state = .scanning
+        discoveredDevices.removeAll()
+        blufiManager.startScan()
+    }
+    
+    func stopScan() {
+        blufiManager.stopScan()
+        state = .poweredOn
+    }
+    
+    func connectToDevice(_ device: DiscoveredDevice) {
+        blufiManager.connect(peripheral: device.peripheral)
+    }
+    
+    func configureWiFi(ssid: String, password: String) {
+        state = .configuring
+        blufiManager.configureWiFi(ssid: ssid, password: password)
+    }
+    
+    func reset() {
+        blufiManager.disconnect()
+        state = .poweredOn
+        discoveredDevices.removeAll()
+    }
+}
+
 struct ContentView: View {
-    @StateObject private var bluetoothManager = BluetoothManager()
+    @StateObject private var viewModel = BluetoothViewModel()
     @State private var wifiSSID: String = ""
     @State private var wifiPassword: String = ""
     
     var body: some View {
         VStack(spacing: 20) {
-            // 状态显示
             statusView
             
-            // 设备列表
-            if bluetoothManager.state == .scanning {
+            if viewModel.state == .scanning {
                 deviceListView
             }
             
-            // WiFi配置表单
-            if bluetoothManager.state == .connected {
+            if viewModel.state == .connected {
                 wifiConfigForm
             }
             
-            // 操作按钮
             actionButton
         }
         .padding()
     }
     
-    // 设备列表视图
     private var deviceListView: some View {
-        List(bluetoothManager.discoveredDevices) { device in
+        List(viewModel.discoveredDevices) { device in
             HStack {
                 VStack(alignment: .leading) {
                     Text(device.name)
@@ -97,16 +160,15 @@ struct ContentView: View {
                 }
             }
             .padding(.vertical, 4)
-            .contentShape(Rectangle())  // 确保整个区域可点击
+            .contentShape(Rectangle())
             .onTapGesture {
-                bluetoothManager.connectToDevice(device)
+                viewModel.connectToDevice(device)
             }
         }
         .listStyle(.plain)
         .frame(height: 200)
     }
     
-    // 状态显示视图
     private var statusView: some View {
         VStack {
             Image(systemName: statusIcon)
@@ -118,7 +180,6 @@ struct ContentView: View {
         }
     }
     
-    // WiFi配置表单
     private var wifiConfigForm: some View {
         VStack {
             TextField("WiFi名称", text: $wifiSSID)
@@ -129,7 +190,6 @@ struct ContentView: View {
         }
     }
     
-    // 操作按钮
     private var actionButton: some View {
         Button(action: handleButtonTap) {
             Text(buttonText)
@@ -140,9 +200,8 @@ struct ContentView: View {
         }
     }
     
-    // 状态图标
     private var statusIcon: String {
-        switch bluetoothManager.state {
+        switch viewModel.state {
         case .poweredOff: return "bolt.horizontal.circle"
         case .poweredOn: return "bolt.horizontal.circle.fill"
         case .scanning: return "arrow.triangle.2.circlepath"
@@ -153,18 +212,16 @@ struct ContentView: View {
         }
     }
     
-    // 状态颜色
     private var statusColor: Color {
-        switch bluetoothManager.state {
+        switch viewModel.state {
         case .configured: return .green
         case .error: return .red
         default: return .blue
         }
     }
     
-    // 状态文本
     private var statusText: String {
-        switch bluetoothManager.state {
+        switch viewModel.state {
         case .poweredOff: return "蓝牙已关闭"
         case .poweredOn: return "蓝牙已开启"
         case .scanning: return "正在扫描设备..."
@@ -175,9 +232,8 @@ struct ContentView: View {
         }
     }
     
-    // 按钮文本
     private var buttonText: String {
-        switch bluetoothManager.state {
+        switch viewModel.state {
         case .poweredOff: return "打开蓝牙"
         case .poweredOn: return "开始扫描"
         case .scanning: return "停止扫描"
@@ -188,9 +244,8 @@ struct ContentView: View {
         }
     }
     
-    // 按钮颜色
     private var buttonColor: Color {
-        switch bluetoothManager.state {
+        switch viewModel.state {
         case .configured: return .green
         case .error: return .red
         case .configuring: return .gray
@@ -198,165 +253,22 @@ struct ContentView: View {
         }
     }
     
-    // 按钮点击处理
     private func handleButtonTap() {
-        switch bluetoothManager.state {
+        switch viewModel.state {
         case .poweredOff:
             if let settingsUrl = URL(string: "App-Prefs:root=Bluetooth") {
-                #if canImport(UIKit)
                 UIApplication.shared.open(settingsUrl)
-                #endif
             }
         case .poweredOn:
-            bluetoothManager.startScan()
+            viewModel.startScan()
         case .scanning:
-            bluetoothManager.stopScan()
+            viewModel.stopScan()
         case .connected:
-            bluetoothManager.configureWiFi(ssid: wifiSSID, password: wifiPassword)
+            viewModel.configureWiFi(ssid: wifiSSID, password: wifiPassword)
         case .configured, .error:
-            bluetoothManager.reset()
+            viewModel.reset()
         default:
             break
-        }
-    }
-}
-
-// 蓝牙管理器
-class BluetoothManager: NSObject, ObservableObject {
-    @Published var state: BluetoothState = .poweredOff
-    @Published var discoveredDevices: [DiscoveredDevice] = []
-    
-    private var centralManager: CBCentralManager!
-    private var blufiClient: BlufiClient?
-    private var peripheral: CBPeripheral?
-    
-    override init() {
-        super.init()
-        centralManager = CBCentralManager(delegate: self, queue: nil)
-    }
-    
-    func connectToDevice(_ device: DiscoveredDevice) {
-        print("正在连接设备：\(device.name)")
-        self.peripheral = device.peripheral
-        centralManager.connect(device.peripheral, options: nil)
-    }
-    
-    func startScan() {
-        print("开始扫描蓝牙设备...")
-        discoveredDevices.removeAll()
-        state = .scanning
-        centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
-    }
-    
-    func stopScan() {
-        centralManager.stopScan()
-        state = .poweredOn
-    }
-    
-    func configureWiFi(ssid: String, password: String) {
-        guard let blufiClient = blufiClient else {
-            state = .error("BlufiClient未初始化")
-            return
-        }
-        
-        state = .configuring
-        
-        // 创建配置参数
-        let params = BlufiConfigureParams()
-      params.opMode = OpModeSta // OpModeSta
-        params.staSsid = ssid
-        params.staPassword = password
-        
-        // 开始配网
-        blufiClient.configure(params)
-    }
-    
-    func reset() {
-        blufiClient?.close()
-        blufiClient = nil
-        peripheral = nil
-        state = .poweredOn
-    }
-}
-
-// MARK: - CBCentralManagerDelegate
-extension BluetoothManager: CBCentralManagerDelegate {
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        switch central.state {
-        case .poweredOn:
-            state = .poweredOn
-        case .poweredOff:
-            state = .poweredOff
-        default:
-            state = .error("蓝牙状态异常")
-        }
-    }
-    
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-//        print("发现设备: \(peripheral.name ?? "Unknown Device") - RSSI: \(RSSI)")
-        
-        let deviceName = peripheral.name ?? "Unknown Device"
-        
-        // 检查设备是否已存在
-        if !discoveredDevices.contains(where: { $0.peripheral.identifier == peripheral.identifier }) {
-            let device = DiscoveredDevice(
-                id: UUID(),
-                peripheral: peripheral,
-                name: deviceName,
-                rssi: RSSI.intValue
-            )
-            DispatchQueue.main.async {
-                self.discoveredDevices.append(device)
-            }
-        }
-    }
-    
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        DispatchQueue.main.async {
-            self.state = .connected
-            self.stopScan()
-        }
-        
-        // 初始化BlufiClient
-        let client = BlufiClient()
-        client.blufiDelegate = self
-        client.connect(peripheral.identifier.uuidString)
-        self.blufiClient = client
-    }
-    
-    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        state = .error("连接失败: \(error?.localizedDescription ?? "未知错误")")
-    }
-}
-
-// MARK: - BlufiDelegate
-extension BluetoothManager: BlufiDelegate {
-    func blufi(_ client: BlufiClient!, gattPrepared status: Int32, service: CBService!, writeChar: CBCharacteristic!, notifyChar: CBCharacteristic!) {
-        if status == 0 { // StatusSuccess
-            // GATT准备就绪，可以开始协商安全
-            client.negotiateSecurity()
-        } else {
-            DispatchQueue.main.async {
-                self.state = .error("GATT准备失败")
-            }
-        }
-    }
-    
-    func blufi(_ client: BlufiClient!, didNegotiateSecurity status: Int32) {
-        DispatchQueue.main.async {
-            if status != 0 { // StatusSuccess
-                self.state = .error("安全协商失败")
-            }
-        }
-    }
-    
-    func blufi(_ client: BlufiClient!, didPostConfigureParams status: Int32) {
-        DispatchQueue.main.async {
-            if status == 0 { // StatusSuccess
-                self.state = .configured
-            } else {
-                self.state = .error("WiFi配置失败")
-            }
         }
     }
 }

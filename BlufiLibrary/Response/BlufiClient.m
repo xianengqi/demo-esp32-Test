@@ -178,7 +178,7 @@ enum {
 }
 
 - (void)scanBLE {
-    NSLog(@"Blufi Scan device: %@", _identifier);
+//    NSLog(@"[BluFi] 开始扫描设备: %@", _identifier);
     [_centralManager scanForPeripheralsWithServices:nil options:nil];
 }
 
@@ -1062,8 +1062,9 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary<NSString *,id> *)advertisementData RSSI:(NSNumber *)RSSI {
-//    NSLog(@"Per UUID: %@, %@", peripheral.name, peripheral.identifier.UUIDString)
+//    NSLog(@"[BluFi] 发现设备: %@ (UUID: %@)", peripheral.name, peripheral.identifier.UUIDString);
     if ([peripheral.identifier isEqual:_identifier]) {
+        NSLog(@"[BluFi] 找到目标设备，停止扫描并开始连接");
         [_centralManager stopScan];
         _peripheral = peripheral;
         _peripheral.delegate = self;
@@ -1148,6 +1149,7 @@ enum {
         NSLog(@"[BluFi] 发现服务成功");
         NSArray<CBService *> *services = [peripheral services];
         for (CBService *service in services) {
+            NSLog(@"[BluFi] 发现服务: %@", service.UUID);
             if ([service.UUID.UUIDString isEqualToString:UUID_SERVICE]) {
                 _service = service;
                 break;
@@ -1172,28 +1174,29 @@ enum {
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didDiscoverCharacteristicsForService:(CBService *)service error:(NSError *)error {
-    // Discover Characteristics
     if (error) {
-        NSLog(@"didDiscoverCharacteristicsForService error: %@", error);
+        NSLog(@"[BluFi] 发现特征值失败: %@", error);
         [self gattDiscoverCallback];
         [self clearConnection];
     } else {
+        NSLog(@"[BluFi] 发现特征值成功，准备开始安全协商");
         CBCharacteristic *writeChar = nil;
         CBCharacteristic *notifyChar = nil;
         NSArray<CBCharacteristic *> *characteristics = [service characteristics];
         for (CBCharacteristic *c in characteristics) {
+            NSLog(@"[BluFi] 发现特征: %@", c.UUID);
             if ([c.UUID isEqual:_writeUUID]) {
-                NSLog(@"didDiscoverCharacteristicsForService get write char");
+                NSLog(@"[BluFi] 找到写特征值");
                 writeChar = c;
             } else if ([c.UUID isEqual:_notifyUUID]) {
-                NSLog(@"didDiscoverCharacteristicsForService get notify char");
+                NSLog(@"[BluFi] 找到通知特征值");
                 notifyChar = c;
             }
         }
         _writeChar = writeChar;
         _notifyChar = notifyChar;
         if (!writeChar || !notifyChar) {
-            NSLog(@"didDiscoverCharacteristicsForService failed");
+            NSLog(@"[BluFi] 错误: 未找到所需的特征值");
             [self gattDiscoverCallback];
             [self clearConnection];
         } else {

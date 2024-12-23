@@ -13,5 +13,6 @@
 #import "BlufiStatusResponse.h"
 #import "BlufiScanResponse.h"
 #import "BlufiVersionResponse.h"
+#import "ESPHeaderFiles.h"
 
 #endif /* demo_esp32_Bridging_Header_h */ 
