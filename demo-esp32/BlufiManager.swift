@@ -7,6 +7,8 @@ class BlufiManager: NSObject {
     private var blufiClient: BlufiClient?
     private var centralManager: CBCentralManager?
     private var currentPeripheral: CBPeripheral?
+    private var writeCharacteristic: CBCharacteristic?
+    private var notifyCharacteristic: CBCharacteristic?
     
     // 回调闭包
     var onStateUpdate: ((String) -> Void)?
@@ -58,6 +60,8 @@ class BlufiManager: NSObject {
         blufiClient?.close()
         blufiClient = nil
         currentPeripheral = nil
+        writeCharacteristic = nil
+        notifyCharacteristic = nil
     }
 }
 
@@ -150,11 +154,28 @@ extension BlufiManager: CBPeripheralDelegate {
         for characteristic in characteristics {
             print("【DEBUG】发现特征 UUID: \(characteristic.uuid)")
             
-            // 如果是可通知的特征，订阅它
-            if characteristic.properties.contains(.notify) {
-                print("【DEBUG】订阅特征通知: \(characteristic.uuid)")
+            // 根据特征 UUID 进行具体处理
+            switch characteristic.uuid.uuidString {
+            case "FF01":
+                print("【DEBUG】找到写特征: \(characteristic.uuid)")
+                // 保存写特征引用
+                writeCharacteristic = characteristic
+                
+            case "FF02":
+                print("【DEBUG】找到通知特征: \(characteristic.uuid)")
+                // 订阅通知
                 peripheral.setNotifyValue(true, for: characteristic)
+                // 保存通知特征引用
+                notifyCharacteristic = characteristic
+                
+            default:
+                break
             }
+        }
+        
+        // 如果两个特征都找到了
+        if writeCharacteristic != nil && notifyCharacteristic != nil {
+            print("【DEBUG】找到所有必要特征，等待 GATT 准备回调")
         }
     }
     
