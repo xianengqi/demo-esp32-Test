@@ -8,6 +8,22 @@
 import SwiftUI
 import CoreBluetooth
 
+// 定义发现的设备结构
+struct DiscoveredDevice: Identifiable, Hashable {
+    let id: UUID
+    let peripheral: CBPeripheral
+    let name: String
+    let rssi: Int
+    
+    static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
 // 定义蓝牙状态
 enum BluetoothState: Equatable {
     case poweredOff
@@ -47,6 +63,11 @@ struct ContentView: View {
             // 状态显示
             statusView
             
+            // 设备列表
+            if bluetoothManager.state == .scanning {
+                deviceListView
+            }
+            
             // WiFi配置表单
             if bluetoothManager.state == .connected {
                 wifiConfigForm
@@ -56,6 +77,29 @@ struct ContentView: View {
             actionButton
         }
         .padding()
+    }
+    
+    // 设备列表视图
+    private var deviceListView: some View {
+        List(bluetoothManager.discoveredDevices) { device in
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(device.name)
+                        .font(.headline)
+                    Text("信号强度: \(device.rssi) dBm")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+                if device.name.contains("ESP32") {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .listStyle(.plain)
+        .frame(height: 200)
     }
     
     // 状态显示视图
@@ -176,6 +220,7 @@ struct ContentView: View {
 // 蓝牙管理器
 class BluetoothManager: NSObject, ObservableObject {
     @Published var state: BluetoothState = .poweredOff
+    @Published var discoveredDevices: [DiscoveredDevice] = []
     
     private var centralManager: CBCentralManager!
     private var blufiClient: BlufiClient?
@@ -188,8 +233,9 @@ class BluetoothManager: NSObject, ObservableObject {
     
     func startScan() {
         print("开始扫描蓝牙设备...")
+        discoveredDevices.removeAll()
         state = .scanning
-        centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
     
     func stopScan() {
@@ -237,10 +283,26 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        print("发现设备: \(peripheral.name ?? "Unknown Device") - RSSI: \(RSSI)")
-        // 这里可以根据设备名称或其他特征过滤设备
-        if let name = peripheral.name, name.contains("ESP32") {
-            print("找到目标ESP32设备：\(name)")
+//        print("发现设备: \(peripheral.name ?? "Unknown Device") - RSSI: \(RSSI)")
+        
+        let deviceName = peripheral.name ?? "Unknown Device"
+        
+        // 检查设备是否已存在
+        if !discoveredDevices.contains(where: { $0.peripheral.identifier == peripheral.identifier }) {
+            let device = DiscoveredDevice(
+                id: UUID(),
+                peripheral: peripheral,
+                name: deviceName,
+                rssi: RSSI.intValue
+            )
+            DispatchQueue.main.async {
+                self.discoveredDevices.append(device)
+            }
+        }
+        
+        // 如果是ESP32设备，自动连接
+        if deviceName.contains("ESP32") {
+            print("找到目标ESP32设备：\(deviceName)")
             self.peripheral = peripheral
             central.connect(peripheral, options: nil)
         }
