@@ -92,6 +92,22 @@ class BluetoothViewModel: ObservableObject {
                 self?.state = .configured
             }
         }
+        
+        // 添加设备发现回调
+        blufiManager.onDeviceFound = { [weak self] (peripheral, RSSI) in
+            DispatchQueue.main.async {
+                // 检查设备是否已存在
+                if !(self?.discoveredDevices.contains(where: { $0.peripheral.identifier == peripheral.identifier }) ?? false) {
+                    let device = DiscoveredDevice(
+                        id: UUID(),
+                        peripheral: peripheral,
+                        name: peripheral.name ?? "Unknown Device",
+                        rssi: RSSI.intValue
+                    )
+                    self?.discoveredDevices.append(device)
+                }
+            }
+        }
     }
     
     func startScan() {
@@ -224,7 +240,7 @@ struct ContentView: View {
         switch viewModel.state {
         case .poweredOff: return "蓝牙已关闭"
         case .poweredOn: return "蓝牙已开启"
-        case .scanning: return "正在扫描设备..."
+        case .scanning: return "正在扫���设备..."
         case .connected: return "设备已连接"
         case .configuring: return "正在配置WiFi..."
         case .configured: return "配置成功"
