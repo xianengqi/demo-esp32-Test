@@ -12,6 +12,9 @@ class BlufiManager: NSObject {
 
   // 添加强引用
   private var retainedSelf: BlufiManager?
+
+   // 添加 state 属性
+    var state: BluetoothState = .poweredOff
     
   // 回调闭包
   var onStateUpdate: ((String) -> Void)?
@@ -215,17 +218,33 @@ extension BlufiManager: BlufiDelegate {
   }
 
   func blufi(_ client: BlufiClient!, didNegotiateSecurity status: BlufiStatusCode) {
-        print("【DEBUG】安全协商结果: \(status)")
-        if status == StatusSuccess {
-            print("安全协商成功")
-            // 可以在这里开始配置 WiFi
-            // 例如:
-            // configureWiFi(ssid: "YourSSID", password: "YourPassword") 
-        } else {
-            print("安全协商失败")
-            onError?("安全协商失败")
-        }
+    print("【DEBUG】安全协商结果: \(status)")
+    if status == StatusSuccess {
+      print("安全协商成功")
+      // 可以在这里开始配置 WiFi
+      // 通知 UI 层可以开始配置 WiFi
+            DispatchQueue.main.async { [weak self] in
+                self?.onStateUpdate?("设备已连接")
+            }
+    } else {
+      print("安全协商失败")
+      onError?("安全协商失败")
     }
+  }
+
+  // 添加配网结果回调
+  func blufi(_ client: BlufiClient!, didPostConfigureParams status: BlufiStatusCode) {
+    print("【DEBUG】配网结果: \(status)")
+    if status == StatusSuccess {
+      print("配网成功")
+      DispatchQueue.main.async { [weak self] in
+        self?.onConfigured?()
+      }
+    } else {
+      print("配网失败")
+      onError?("配网失败")
+    }
+  }
 
   func blufi(_ client: BlufiClient!, gattNotification data: Data!, packageType: UInt8, subType: UInt8) -> Bool {
     print("收到GATT通知: packageType=\(packageType), subType=\(subType)")
