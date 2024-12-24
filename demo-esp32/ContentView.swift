@@ -237,6 +237,22 @@ struct ContentView: View {
     private var wifiConfigForm: some View {
         VStack(spacing: 20) {
             Button(action: {
+                if let url = URL(string: "App-Prefs:root=PERSONAL_HOTSPOT") {
+                    UIApplication.shared.open(url)
+                }
+            }) {
+                HStack {
+                    Image(systemName: "personalhotspot")
+                    Text("开启个人热点")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.orange)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+
+            Button(action: {
                 viewModel.scanWiFi()
             }) {
                 HStack {
