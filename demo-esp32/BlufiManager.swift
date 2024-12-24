@@ -115,7 +115,7 @@ extension BlufiManager: CBCentralManagerDelegate {
   func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
 //        print("发现设备: \(peripheral.name ?? "Unknown") RSSI: \(RSSI)")
         
-    // 通知发现了新设备
+    // 通知发��了新设备
     onDeviceFound?(peripheral, RSSI)
   }
     
@@ -227,7 +227,7 @@ extension BlufiManager: BlufiDelegate {
     print("【DEBUG】安全协商结果: \(status)")
     if status == StatusSuccess {
       print("安全协商成功")
-      // 可以在这里开始配置 WiFi
+      // 可在这里开始配置 WiFi
       // 通知 UI 层可以开始配置 WiFi
             DispatchQueue.main.async { [weak self] in
                 self?.onStateUpdate?("设备已连接")
@@ -260,15 +260,19 @@ extension BlufiManager: BlufiDelegate {
 
   func blufi(_ client: BlufiClient!, didReceiveDeviceScanResponse scanResults: [BlufiScanResponse]?, status: BlufiStatusCode) {
     if status == StatusSuccess {
-      print("WiFi 扫描成功")
-      if let results = scanResults {
-        DispatchQueue.main.async { [weak self] in
-          self?.onWifiScanResult?(results)
+        print("【DEBUG】WiFi 扫描成功")
+        if let results = scanResults {
+            print("【DEBUG】扫描到 \(results.count) 个WiFi网络:")
+            for result in results {
+                print("【DEBUG】SSID: \(result.ssid), RSSI: \(result.rssi)dBm")
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.onWifiScanResult?(results)
+            }
         }
-      }
     } else {
-      print("WiFi 扫描失败")
-      onError?("WiFi 扫描失败")
+        print("【DEBUG】WiFi 扫描失败: \(status)")
+        onError?("WiFi 扫描失败")
     }
   }
 }

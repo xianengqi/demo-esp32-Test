@@ -100,8 +100,10 @@ class BluetoothViewModel: ObservableObject {
         blufiManager.onWifiScanResult = { [weak self] results in
             DispatchQueue.main.async {
                 self?.isWifiScanning = false
+                print("【DEBUGView】处理扫描结果:")
                 self?.wifiNetworks = results
                     .compactMap { result in
+                        print("【DEBUGView】处理WiFi: \(result.ssid)")
                         return WiFiNetwork(ssid: result.ssid, rssi: result.rssi)
                     }
                     .sorted { $0.rssi > $1.rssi }
@@ -404,11 +406,13 @@ struct ContentView: View {
     }
     
     private func scanWiFiWithRetry() {
+        print("【DEBUGView】开始扫描WiFi网络...")
         viewModel.scanWiFi()
         
         // 3秒后自动重试一次
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             if viewModel.wifiNetworks.isEmpty {
+                print("【DEBUGView】3秒后重试扫描WiFi网络...")
                 viewModel.scanWiFi()
             }
         }
