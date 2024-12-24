@@ -164,11 +164,11 @@ struct WiFiNetwork: Identifiable, Hashable {
     let rssi: Int8
     
     static func == (lhs: WiFiNetwork, rhs: WiFiNetwork) -> Bool {
-        return lhs.id == rhs.id
+        return lhs.ssid == rhs.ssid
     }
     
     func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
+        hasher.combine(ssid)
     }
 }
 
@@ -262,6 +262,7 @@ struct ContentView: View {
                     .foregroundColor(.gray)
             } else {
                 Picker("选择WiFi", selection: $wifiSSID) {
+                    Text("请选择WiFi网络").tag(Optional<String>.none)
                     ForEach(viewModel.wifiNetworks) { network in
                         HStack {
                             Image(systemName: "wifi")
