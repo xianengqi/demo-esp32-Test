@@ -214,6 +214,19 @@ extension BlufiManager: BlufiDelegate {
     }
   }
 
+  func blufi(_ client: BlufiClient!, didNegotiateSecurity status: BlufiStatusCode) {
+        print("【DEBUG】安全协商结果: \(status)")
+        if status == StatusSuccess {
+            print("安全协商成功")
+            // 可以在这里开始配置 WiFi
+            // 例如:
+            // configureWiFi(ssid: "YourSSID", password: "YourPassword") 
+        } else {
+            print("安全协商失败")
+            onError?("安全协商失败")
+        }
+    }
+
   func blufi(_ client: BlufiClient!, gattNotification data: Data!, packageType: UInt8, subType: UInt8) -> Bool {
     print("收到GATT通知: packageType=\(packageType), subType=\(subType)")
     // 返回 false 让 BlufiClient 继续处理数据
