@@ -178,7 +178,7 @@ enum {
 }
 
 - (void)scanBLE {
-//    NSLog(@"[BluFi] 开始扫描设备: %@", _identifier);
+    NSLog(@"Blufi Scan device: %@", _identifier);
     [_centralManager scanForPeripheralsWithServices:nil options:nil];
 }
 
@@ -991,53 +991,43 @@ enum {
         BOOL setSecurity = NO;
         BlufiStatusCode code = StatusFailed;
         @try {
-            NSLog(@"[BluFi] 开始安全协商...");
-            
             BlufiDH *blufiDH = [self postNegotiateSecurity];
             if (!blufiDH) {
-                NSLog(@"[BluFi] 错误: DH密钥交换失败");
                 code = StatusWriteFailed;
                 return;
             }
-            NSLog(@"[BluFi] DH密钥交换成功");
+            NSLog(@"negotiateSecurity DH posted");
             
             NSData *deviceKey = [self.deviceKey dequeue];
             if (!deviceKey) {
-                NSLog(@"[BluFi] 错误: 获取设备密钥失败");
+                NSLog(@"negotiateSecurity Recevie nil deviceKey");
                 code = StatusFailed;
                 return;
             }
-            NSLog(@"[BluFi] 成功获取设备密钥");
             
             NSData *secretKey = [blufiDH generateSecret:deviceKey];
             self.aesKey = [BlufiSecurity md5:secretKey];
-            NSLog(@"[BluFi] 生成AES密钥成功");
-            
             if (DBUG) {
-                NSLog(@"[BluFi] DH Secret = %@", secretKey);
-                NSLog(@"[BluFi] AES Key   = %@", self.aesKey);
+                NSLog(@"DH Secret = %@", secretKey);
+                NSLog(@"AES Key   = %@", self.aesKey);
             }
             
             setSecurity = [self postSetSecurityCtrlEncrypted:NO ctrlChecksum:NO dataEncrypted:YES dataChecksum:YES];
             if (!setSecurity) {
-                NSLog(@"[BluFi] 错误: 设置安全模式失败");
+                NSLog(@"negotiateSecurity postSetSecurity failed");
                 code = StatusWriteFailed;
-            } else {
-                NSLog(@"[BluFi] 设置安全模式成功");
             }
         } @catch (NSException *exception) {
-            NSLog(@"[BluFi] 安全协商异常: %@", exception);
+            NSLog(@"negotiateSecurity exception: %@", exception);
             code = StatusException;
         } @finally {
             if (setSecurity) {
                 self.encrypted = YES;
                 self.checksum = YES;
-                NSLog(@"[BluFi] 安全协商完成: 加密已启用");
                 [self onNegotiateSecurityResult:StatusSuccess];
             } else {
                 self.encrypted = NO;
                 self.checksum = NO;
-                NSLog(@"[BluFi] 安全协商失败: 代码=%d", code);
                 [self onNegotiateSecurityResult:code];
             }
         }
@@ -1062,9 +1052,8 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary<NSString *,id> *)advertisementData RSSI:(NSNumber *)RSSI {
-//    NSLog(@"[BluFi] 发现设备: %@ (UUID: %@)", peripheral.name, peripheral.identifier.UUIDString);
+//    NSLog(@"Per UUID: %@, %@", peripheral.name, peripheral.identifier.UUIDString)
     if ([peripheral.identifier isEqual:_identifier]) {
-        NSLog(@"[BluFi] 找到目标设备，停止扫描并开始连接");
         [_centralManager stopScan];
         _peripheral = peripheral;
         _peripheral.delegate = self;
@@ -1082,7 +1071,6 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didConnectPeripheral:(CBPeripheral *)peripheral {
-    NSLog(@"[BluFi] 蓝牙设备连接成功");
     // Connect BLE successfully
     CBUUID *uuid = [CBUUID UUIDWithString:UUID_SERVICE];
     NSArray<CBUUID *> *filters = @[uuid];
@@ -1099,7 +1087,6 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
-    NSLog(@"[BluFi] 蓝牙设备连接失败: %@", error);
     // Connect BLE failed
     [self clearConnection];
     
@@ -1113,7 +1100,6 @@ enum {
 }
 
 - (void)centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
-    NSLog(@"[BluFi] 蓝牙设备断开连接: %@", error ? error : @"正常断开");
     // Disconnect BLE
     [self clearConnection];
     
@@ -1141,15 +1127,14 @@ enum {
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didDiscoverServices:(NSError *)error {
+    // Discover services
     if (error) {
-        NSLog(@"[BluFi] 发现服务失败: %@", error);
+        NSLog(@"didDiscoverServices error: %@", error);
         [self clearConnection];
         [self gattDiscoverCallback];
     } else {
-        NSLog(@"[BluFi] 发现服务成功");
         NSArray<CBService *> *services = [peripheral services];
         for (CBService *service in services) {
-            NSLog(@"[BluFi] 发现服务: %@", service.UUID);
             if ([service.UUID.UUIDString isEqualToString:UUID_SERVICE]) {
                 _service = service;
                 break;
@@ -1160,7 +1145,7 @@ enum {
             [peripheral discoverCharacteristics:nil forService:service];
             _service = service;
         } else {
-            NSLog(@"[BluFi] 未找到目标服务");
+            NSLog(@"didDiscoverServices failed");
             [self gattDiscoverCallback];
             [self clearConnection];
         }
@@ -1174,29 +1159,28 @@ enum {
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didDiscoverCharacteristicsForService:(CBService *)service error:(NSError *)error {
+    // Discover Characteristics
     if (error) {
-        NSLog(@"[BluFi] 发现特征值失败: %@", error);
+        NSLog(@"didDiscoverCharacteristicsForService error: %@", error);
         [self gattDiscoverCallback];
         [self clearConnection];
     } else {
-        NSLog(@"[BluFi] 发现特征值成功，准备开始安全协商");
         CBCharacteristic *writeChar = nil;
         CBCharacteristic *notifyChar = nil;
         NSArray<CBCharacteristic *> *characteristics = [service characteristics];
         for (CBCharacteristic *c in characteristics) {
-            NSLog(@"[BluFi] 发现特征: %@", c.UUID);
             if ([c.UUID isEqual:_writeUUID]) {
-                NSLog(@"[BluFi] 找到写特征值");
+                NSLog(@"didDiscoverCharacteristicsForService get write char");
                 writeChar = c;
             } else if ([c.UUID isEqual:_notifyUUID]) {
-                NSLog(@"[BluFi] 找到通知特征值");
+                NSLog(@"didDiscoverCharacteristicsForService get notify char");
                 notifyChar = c;
             }
         }
         _writeChar = writeChar;
         _notifyChar = notifyChar;
         if (!writeChar || !notifyChar) {
-            NSLog(@"[BluFi] 错误: 未找到所需的特征值");
+            NSLog(@"didDiscoverCharacteristicsForService failed");
             [self gattDiscoverCallback];
             [self clearConnection];
         } else {

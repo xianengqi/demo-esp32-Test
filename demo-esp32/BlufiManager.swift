@@ -9,6 +9,9 @@ class BlufiManager: NSObject {
   private var currentPeripheral: CBPeripheral?
   private var writeCharacteristic: CBCharacteristic?
   private var notifyCharacteristic: CBCharacteristic?
+
+  // 添加强引用
+  private var retainedSelf: BlufiManager?
     
   // 回调闭包
   var onStateUpdate: ((String) -> Void)?
@@ -20,6 +23,15 @@ class BlufiManager: NSObject {
   override private init() {
     super.init()
     centralManager = CBCentralManager(delegate: self, queue: nil)
+    retainedSelf = self
+    // 在初始化时就创建 BlufiClient
+    let client = BlufiClient()
+    client.blufiDelegate = self
+    blufiClient = client
+  }
+
+  deinit {
+    print("【DEBUG】BlufiManager 被释放")
   }
     
   // 开始扫描设备
@@ -37,8 +49,16 @@ class BlufiManager: NSObject {
     
   // 连接设备
   func connect(peripheral: CBPeripheral) {
+    print("【DEBUG】开始连接设备")
     currentPeripheral = peripheral
-    peripheral.delegate = self // 设置代理
+    peripheral.delegate = self
+    
+    // 直接使用已存在的 client
+    if let client = blufiClient {
+      client.connect(peripheral.identifier.uuidString)
+      print("【DEBUG】调用 client.connect 完成")
+    }
+    
     centralManager?.connect(peripheral, options: nil)
   }
     
@@ -93,30 +113,10 @@ extension BlufiManager: CBCentralManagerDelegate {
   func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
     print("已连接到设备: \(peripheral.name ?? "Unknown")")
         
-    // 1. 先保存外设引用
     currentPeripheral = peripheral
-        
-    // 2. 设置外设代理
     peripheral.delegate = self
-        
-    // 3. 开始搜索服务
     print("【DEBUG】开始搜索服务")
     peripheral.discoverServices(nil)
-        
-    // 4. 创建并配置 BlufiClient
-    let client = BlufiClient()
-    print("【DEBUG】BlufiClient 创建完成")
-        
-    // 5. 设置代理并保存引用（重要：要保持强引用）
-    client.blufiDelegate = self
-    print("【DEBUG】设置 blufiDelegate 完成")
-        
-    // 6. 连接设备
-    client.connect(peripheral.identifier.uuidString)
-    print("【DEBUG】调用 client.connect 完成")
-        
-    // 7. 保存 client 引用
-    blufiClient = client
         
     onConnected?()
   }
@@ -190,12 +190,20 @@ extension BlufiManager: CBPeripheralDelegate {
   func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
     print("【DEBUG】写入特征值: \(characteristic.uuid), 错误: \(error?.localizedDescription ?? "无")")
   }
+    
+  func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+    print("【DEBUG】通知状态更新: \(characteristic.uuid), error: \(error?.localizedDescription ?? "无")")
+    if error == nil && characteristic.uuid.uuidString == "FF02" {
+      print("【DEBUG】通知特征订阅成功")
+    }
+  }
 }
 
 // MARK: - BlufiDelegate
 
 extension BlufiManager: BlufiDelegate {
   func blufi(_ client: BlufiClient!, gattPrepared status: BlufiStatusCode, service: CBService?, writeChar: CBCharacteristic?, notifyChar: CBCharacteristic?) {
+    print("【DEBUG】进入 gattPrepared 回调")
     print("【DEBUG】进入 gattPrepared 回调，status: \(status)")
     if status == StatusSuccess {
       print("GATT准备完成，开始安全协商")
@@ -205,37 +213,10 @@ extension BlufiManager: BlufiDelegate {
       onError?("GATT准备失败")
     }
   }
-    
-  func blufi(_ client: BlufiClient!, didNegotiateSecurity status: UInt32) {
-    print("【DEBUG】进入 didNegotiateSecurity 回调，status: \(status)")
-    if status == 0 { // StatusSuccess = 0
-      print("安全协商成功")
-      onStateUpdate?("安全协商成功")
-    } else {
-      print("安全协商失败: \(status)")
-      onError?("安全协商失败")
-    }
-  }
-    
-  func blufi(_ client: BlufiClient!, didPostConfigureParams status: UInt32) {
-    print("【DEBUG】进入 didPostConfigureParams 回调，status: \(status)")
-    if status == 0 { // StatusSuccess = 0
-      print("WiFi配置成功")
-      onConfigured?()
-    } else {
-      print("WiFi配置失败: \(status)")
-      onError?("WiFi配置失败")
-    }
-  }
-    
-  // 可选实现的其他代理方法
+
   func blufi(_ client: BlufiClient!, gattNotification data: Data!, packageType: UInt8, subType: UInt8) -> Bool {
     print("收到GATT通知: packageType=\(packageType), subType=\(subType)")
-    return true
-  }
-    
-  func blufi(_ client: BlufiClient!, didReceiveError errCode: Int) {
-    print("��到错误码: \(errCode)")
-    onError?("收到错误码: \(errCode)")
+    // 返回 false 让 BlufiClient 继续处理数据
+    return false
   }
 }
