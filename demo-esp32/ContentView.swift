@@ -55,7 +55,7 @@ enum BluetoothState: Equatable {
 class BluetoothViewModel: ObservableObject {
     @Published var state: BluetoothState = .poweredOff
     @Published var discoveredDevices: [DiscoveredDevice] = []
-    @Published var wifiNetworks: [(ssid: String, rssi: Int8)] = []
+    @Published var wifiNetworks: [WiFiNetwork] = []
     @Published var isWifiScanning: Bool = false
     
     private let blufiManager = BlufiManager.shared
@@ -100,8 +100,11 @@ class BluetoothViewModel: ObservableObject {
         blufiManager.onWifiScanResult = { [weak self] results in
             DispatchQueue.main.async {
                 self?.isWifiScanning = false
-                self?.wifiNetworks = results.map { ($0.ssid ?? "Unknown", $0.rssi) }
-                    .sorted { $0.rssi > $1.rssi } // 按信号强度排序
+                self?.wifiNetworks = results
+                    .compactMap { result in
+                        return WiFiNetwork(ssid: result.ssid, rssi: result.rssi)
+                    }
+                    .sorted { $0.rssi > $1.rssi }
             }
         }
         
@@ -155,9 +158,23 @@ class BluetoothViewModel: ObservableObject {
     }
 }
 
+struct WiFiNetwork: Identifiable, Hashable {
+    let id = UUID()
+    let ssid: String
+    let rssi: Int8
+    
+    static func == (lhs: WiFiNetwork, rhs: WiFiNetwork) -> Bool {
+        return lhs.id == rhs.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
 struct ContentView: View {
     @StateObject private var viewModel = BluetoothViewModel()
-    @State private var wifiSSID: String = ""
+    @State private var wifiSSID: String? = nil
     @State private var wifiPassword: String = ""
     
     var body: some View {
@@ -245,31 +262,29 @@ struct ContentView: View {
                     .foregroundColor(.gray)
             } else {
                 Picker("选择WiFi", selection: $wifiSSID) {
-                    ForEach(viewModel.wifiNetworks, id: \.ssid) { network in
+                    ForEach(viewModel.wifiNetworks) { network in
                         HStack {
                             Image(systemName: "wifi")
-                            Text("\(network.ssid)")
+                            Text(network.ssid)
                             Spacer()
                             Text("\(network.rssi)dBm")
                                 .foregroundColor(.gray)
                         }
-                        .tag(network.ssid)
+                        .tag(Optional(network.ssid))
                     }
                 }
                 .pickerStyle(MenuPickerStyle())
             }
             
             // WiFi密码输入框
-            if !wifiSSID.isEmpty {
+            if let selectedSSID = wifiSSID {
                 SecureField("WiFi密码", text: $wifiPassword)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
             }
             
             // 配置按钮
-            Button(action: {
-                viewModel.configureWiFi(ssid: wifiSSID, password: wifiPassword)
-            }) {
+            Button(action: configureWiFi) {
                 Text("配置WiFi")
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -355,11 +370,19 @@ struct ContentView: View {
         case .scanning:
             viewModel.stopScan()
         case .connected:
-            viewModel.configureWiFi(ssid: wifiSSID, password: wifiPassword)
+            if let ssid = wifiSSID {
+                viewModel.configureWiFi(ssid: ssid, password: wifiPassword)
+            }
         case .configured, .error:
             viewModel.reset()
         default:
             break
+        }
+    }
+    
+    private func configureWiFi() {
+        if let ssid = wifiSSID {
+            viewModel.configureWiFi(ssid: ssid, password: wifiPassword)
         }
     }
 }
