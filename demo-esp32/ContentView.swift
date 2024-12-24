@@ -56,6 +56,7 @@ class BluetoothViewModel: ObservableObject {
     @Published var state: BluetoothState = .poweredOff
     @Published var discoveredDevices: [DiscoveredDevice] = []
     @Published var wifiNetworks: [(ssid: String, rssi: Int8)] = []
+    @Published var isWifiScanning: Bool = false
     
     private let blufiManager = BlufiManager.shared
     
@@ -92,6 +93,15 @@ class BluetoothViewModel: ObservableObject {
         blufiManager.onConfigured = { [weak self] in
             DispatchQueue.main.async {
                 self?.state = .configured
+            }
+        } 
+
+        // 在 setupCallbacks() 中添加
+        blufiManager.onWifiScanResult = { [weak self] results in
+            DispatchQueue.main.async {
+                self?.isWifiScanning = false
+                self?.wifiNetworks = results.map { ($0.ssid ?? "Unknown", $0.rssi) }
+                    .sorted { $0.rssi > $1.rssi } // 按信号强度排序
             }
         }
         
@@ -139,7 +149,8 @@ class BluetoothViewModel: ObservableObject {
     }
     
     func scanWiFi() {
-        state = .configuring
+        isWifiScanning = true
+        wifiNetworks.removeAll()
         blufiManager.scanWiFi()
     }
 }
@@ -207,18 +218,67 @@ struct ContentView: View {
     }
     
     private var wifiConfigForm: some View {
-        VStack(spacing: 16) {
-            TextField("WiFi名称", text: $wifiSSID)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+        VStack(spacing: 20) {
+            Button(action: {
+                viewModel.scanWiFi()
+            }) {
+                HStack {
+                    Text(viewModel.state == .configuring ? "正在扫描..." : "扫描附近WiFi")
+                    if viewModel.state == .configuring {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    }
+                }
                 .frame(maxWidth: .infinity)
+                .padding()
+                .background(viewModel.state == .configuring ? Color.gray : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+            .disabled(viewModel.state == .configuring)
             
-            SecureField("WiFi密码", text: $wifiPassword)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
-                .frame(maxWidth: .infinity)
+            if viewModel.isWifiScanning {
+                ProgressView("正在扫描WiFi网络...")
+                    .progressViewStyle(CircularProgressViewStyle())
+            } else if viewModel.wifiNetworks.isEmpty {
+                Text("未找到WiFi网络")
+                    .foregroundColor(.gray)
+            } else {
+                Picker("选择WiFi", selection: $wifiSSID) {
+                    ForEach(viewModel.wifiNetworks, id: \.ssid) { network in
+                        HStack {
+                            Image(systemName: "wifi")
+                            Text("\(network.ssid)")
+                            Spacer()
+                            Text("\(network.rssi)dBm")
+                                .foregroundColor(.gray)
+                        }
+                        .tag(network.ssid)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+            }
+            
+            // WiFi密码输入框
+            if !wifiSSID.isEmpty {
+                SecureField("WiFi密码", text: $wifiPassword)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+            }
+            
+            // 配置按钮
+            Button(action: {
+                viewModel.configureWiFi(ssid: wifiSSID, password: wifiPassword)
+            }) {
+                Text("配置WiFi")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+            }
         }
-        .padding(.vertical)
+        .padding()
     }
     
     private var actionButton: some View {

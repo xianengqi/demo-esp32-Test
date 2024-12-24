@@ -22,6 +22,7 @@ class BlufiManager: NSObject {
   var onConnected: (() -> Void)?
   var onConfigured: (() -> Void)?
   var onDeviceFound: ((CBPeripheral, NSNumber) -> Void)?
+  var onWifiScanResult: (([BlufiScanResponse]) -> Void)?
     
   override private init() {
     super.init()
@@ -261,8 +262,8 @@ extension BlufiManager: BlufiDelegate {
     if status == StatusSuccess {
       print("WiFi 扫描成功")
       if let results = scanResults {
-        for result in results {
-          print("发现 WiFi: \(result.ssid ?? "Unknown"), 信号强度: \(result.rssi)")
+        DispatchQueue.main.async { [weak self] in
+          self?.onWifiScanResult?(results)
         }
       }
     } else {

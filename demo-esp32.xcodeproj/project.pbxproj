@@ -756,6 +756,9 @@
 				"HEADER_SEARCH_PATHS[arch=*]" = "$(SRCROOT)/BlufiLibrary/Security/openssl/include/";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "需要使用蓝牙来配置ESP32设备";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "需要蓝牙权限来搜索和连接ESP32设备";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "This application uses location permissions to obtain currently connected Wi-Fi information. This application does not collect, store or record any location data.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "This application uses location permissions to obtain currently connected Wi-Fi information. This application does not collect, store or record any location data.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This application uses location permissions to obtain currently connected Wi-Fi information. This application does not collect, store or record any location data.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -794,6 +797,9 @@
 				"HEADER_SEARCH_PATHS[arch=*]" = "$(SRCROOT)/BlufiLibrary/Security/openssl/include/";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "需要使用蓝牙来配置ESP32设备";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "需要蓝牙权限来搜索和连接ESP32设备";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "This application uses location permissions to obtain currently connected Wi-Fi information. This application does not collect, store or record any location data.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "This application uses location permissions to obtain currently connected Wi-Fi information. This application does not collect, store or record any location data.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This application uses location permissions to obtain currently connected Wi-Fi information. This application does not collect, store or record any location data.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
