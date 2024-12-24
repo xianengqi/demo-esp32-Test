@@ -55,6 +55,7 @@ enum BluetoothState: Equatable {
 class BluetoothViewModel: ObservableObject {
     @Published var state: BluetoothState = .poweredOff
     @Published var discoveredDevices: [DiscoveredDevice] = []
+    @Published var wifiNetworks: [(ssid: String, rssi: Int8)] = []
     
     private let blufiManager = BlufiManager.shared
     
@@ -135,6 +136,11 @@ class BluetoothViewModel: ObservableObject {
         blufiManager.disconnect()
         state = .poweredOn
         discoveredDevices.removeAll()
+    }
+    
+    func scanWiFi() {
+        state = .configuring
+        blufiManager.scanWiFi()
     }
 }
 

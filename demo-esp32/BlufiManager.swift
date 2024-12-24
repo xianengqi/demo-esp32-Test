@@ -86,6 +86,11 @@ class BlufiManager: NSObject {
     writeCharacteristic = nil
     notifyCharacteristic = nil
   }
+
+  func scanWiFi() {
+    print("开始扫描 WiFi...")
+    blufiClient?.requestDeviceScan()
+  }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -250,5 +255,19 @@ extension BlufiManager: BlufiDelegate {
     print("收到GATT通知: packageType=\(packageType), subType=\(subType)")
     // 返回 false 让 BlufiClient 继续处理数据
     return false
+  }
+
+  func blufi(_ client: BlufiClient!, didReceiveDeviceScanResponse scanResults: [BlufiScanResponse]?, status: BlufiStatusCode) {
+    if status == StatusSuccess {
+      print("WiFi 扫描成功")
+      if let results = scanResults {
+        for result in results {
+          print("发现 WiFi: \(result.ssid ?? "Unknown"), 信号强度: \(result.rssi)")
+        }
+      }
+    } else {
+      print("WiFi 扫描失败")
+      onError?("WiFi 扫描失败")
+    }
   }
 }
