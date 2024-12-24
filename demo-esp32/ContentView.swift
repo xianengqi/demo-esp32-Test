@@ -253,7 +253,7 @@ struct ContentView: View {
             }
 
             Button(action: {
-                viewModel.scanWiFi()
+                scanWiFiWithRetry()
             }) {
                 HStack {
                     Text(viewModel.state == .configuring ? "正在扫描..." : "扫描附近WiFi")
@@ -400,6 +400,17 @@ struct ContentView: View {
     private func configureWiFi() {
         if let ssid = wifiSSID {
             viewModel.configureWiFi(ssid: ssid, password: wifiPassword)
+        }
+    }
+    
+    private func scanWiFiWithRetry() {
+        viewModel.scanWiFi()
+        
+        // 3秒后自动重试一次
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            if viewModel.wifiNetworks.isEmpty {
+                viewModel.scanWiFi()
+            }
         }
     }
 }
